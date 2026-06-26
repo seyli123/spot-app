@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Animated, View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, ScrollView,
+  TextInput, Keyboard,
 } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import Constants from 'expo-constants';
 import { useTheme, Colors, COPENHAGEN, DARK_MAP_STYLE } from '../theme';
@@ -23,6 +24,55 @@ interface Props { user: User }
 
 const BANNER_LIFT = 76;
 
+// ── Clustering ────────────────────────────────────────────────────────────────
+
+interface SpotCluster {
+  id: string;
+  spots: Spot[];
+  lat: number;
+  lng: number;
+}
+
+type SpotOrCluster = { type: 'spot'; spot: Spot } | { type: 'cluster'; cluster: SpotCluster };
+
+function clusterSpots(spots: Spot[], latDelta: number): SpotOrCluster[] {
+  const threshold = latDelta * 0.06;
+  const used = new Set<string>();
+  const result: SpotOrCluster[] = [];
+  const sorted = [...spots].sort((a, b) => a.lat - b.lat);
+
+  for (const spot of sorted) {
+    if (used.has(spot.id)) continue;
+    used.add(spot.id);
+
+    const nearby = sorted.filter(s =>
+      !used.has(s.id) &&
+      Math.abs(s.lat - spot.lat) < threshold &&
+      Math.abs(s.lng - spot.lng) < threshold
+    );
+
+    if (nearby.length > 0) {
+      const all = [spot, ...nearby];
+      nearby.forEach(s => used.add(s.id));
+      result.push({
+        type: 'cluster',
+        cluster: {
+          id: `cluster-${spot.id}`,
+          spots: all,
+          lat: all.reduce((sum, s) => sum + s.lat, 0) / all.length,
+          lng: all.reduce((sum, s) => sum + s.lng, 0) / all.length,
+        },
+      });
+    } else {
+      result.push({ type: 'spot', spot });
+    }
+  }
+
+  return result;
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
 const createStyles = (colors: Colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   map: { flex: 1 },
@@ -41,6 +91,25 @@ const createStyles = (colors: Colors) => StyleSheet.create({
     borderLeftColor: 'transparent', borderRightColor: 'transparent',
     borderTopColor: colors.border, marginTop: -1,
   },
+  // Cluster marker
+  clusterContainer: { alignItems: 'center' },
+  clusterBubble: {
+    backgroundColor: '#1A1A1A', borderRadius: 24, width: 48, height: 48,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2.5, borderColor: '#FF6B6B',
+    shadowColor: '#FF6B6B', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4, shadowRadius: 6, elevation: 6,
+  },
+  clusterCount: {
+    color: '#fff', fontSize: 18, fontWeight: '800',
+  },
+  clusterTail: {
+    width: 0, height: 0,
+    borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8,
+    borderLeftColor: 'transparent', borderRightColor: 'transparent',
+    borderTopColor: '#FF6B6B', marginTop: -1,
+  },
+  // Check-in bubbles
   bubbleWrapper: {
     width: 80, height: 80, alignItems: 'center', justifyContent: 'center',
   },
@@ -103,8 +172,9 @@ const createStyles = (colors: Colors) => StyleSheet.create({
   spotLabelText: {
     color: '#fff', fontSize: 10, fontWeight: '600',
   },
+  // Filter bar
   filterBar: {
-    position: 'absolute', top: Constants.statusBarHeight + 12, left: 0, right: 0,
+    position: 'absolute', top: Constants.statusBarHeight + 12, left: 0, right: 50,
     paddingHorizontal: 12,
   },
   filterChip: {
@@ -117,6 +187,53 @@ const createStyles = (colors: Colors) => StyleSheet.create({
   filterChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   filterChipText: { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },
   filterChipTextActive: { color: '#fff' },
+  // Search
+  searchBtn: {
+    position: 'absolute', top: Constants.statusBarHeight + 12, right: 12,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: colors.border,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15, shadowRadius: 3, elevation: 3,
+  },
+  searchBtnActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  searchBtnText: { fontSize: 16 },
+  searchBarContainer: {
+    position: 'absolute', top: Constants.statusBarHeight + 56, left: 12, right: 12,
+    backgroundColor: colors.surface, borderRadius: 14,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 4,
+    borderWidth: 1, borderColor: colors.border,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2, shadowRadius: 6, elevation: 6,
+  },
+  searchIcon: { fontSize: 16, marginRight: 8, color: colors.textMuted },
+  searchInput: {
+    flex: 1, fontSize: 16, color: colors.text, paddingVertical: 10,
+  },
+  searchCloseBtn: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: colors.surfaceElevated,
+    alignItems: 'center', justifyContent: 'center', marginLeft: 8,
+  },
+  searchCloseText: { color: colors.textMuted, fontSize: 13, fontWeight: '700' },
+  searchResults: {
+    position: 'absolute', top: Constants.statusBarHeight + 104, left: 12, right: 12,
+    backgroundColor: colors.surface, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.border,
+    maxHeight: 220, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2, shadowRadius: 8, elevation: 8,
+  },
+  searchResultItem: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  searchResultEmoji: { fontSize: 20, marginRight: 12 },
+  searchResultName: { color: colors.text, fontSize: 15, fontWeight: '600', flex: 1 },
+  searchResultArrow: { color: colors.textMuted, fontSize: 14 },
+  // Banners & FAB
   banner: {
     position: 'absolute', bottom: 16, left: 16, right: 16,
     flexDirection: 'row', alignItems: 'center',
@@ -165,6 +282,8 @@ const createStyles = (colors: Colors) => StyleSheet.create({
   },
   fabIcon: { color: '#fff', fontSize: 28, lineHeight: 30, fontWeight: '300' },
 });
+
+// ── CheckInBubble ─────────────────────────────────────────────────────────────
 
 function CheckInBubble({ checkin, spotName, spotLat, spotLng, idx, isSelf, showCarBadge, incomingCount, colors, styles, onPress }: {
   checkin: CheckInWithUser;
@@ -278,6 +397,8 @@ function CheckInBubble({ checkin, spotName, spotLat, spotLng, idx, isSelf, showC
   );
 }
 
+// ── MapScreen ─────────────────────────────────────────────────────────────────
+
 export default function MapScreen({ user }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -301,6 +422,14 @@ export default function MapScreen({ user }: Props) {
   const [myOnMyWayCheckinIds, setMyOnMyWayCheckinIds] = useState<Set<string>>(new Set());
   const [incomingUserIds, setIncomingUserIds] = useState<Set<string>>(new Set());
   const [incomingCountByCheckin, setIncomingCountByCheckin] = useState<Map<string, number>>(new Map());
+
+  // Clustering state
+  const [mapRegion, setMapRegion] = useState<Region>(COPENHAGEN as Region);
+
+  // Search state
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<TextInput>(null);
 
   useEffect(() => { return subscribeSpots(setSpots); }, []);
   useEffect(() => { return subscribeActiveCheckins(setRawCheckins); }, []);
@@ -362,6 +491,63 @@ export default function MapScreen({ user }: Props) {
   const myPreCheckIn = myCheckIn?.type === 'pre' ? myCheckIn : null;
   const myActiveSpot = myActiveCheckIn ? spots.find((s) => s.id === myActiveCheckIn.spotId) ?? null : null;
   const myPreSpot = myPreCheckIn ? spots.find((s) => s.id === myPreCheckIn.spotId) ?? null : null;
+
+  // Clustering
+  const clusteredSpots = useMemo(
+    () => clusterSpots(spots, mapRegion.latitudeDelta),
+    [spots, mapRegion.latitudeDelta],
+  );
+
+  // Search
+  const searchMatchIds = useMemo(() => {
+    if (!searchActive || !searchQuery.trim()) return null;
+    const q = searchQuery.trim().toLowerCase();
+    return new Set(spots.filter(s => s.name.toLowerCase().includes(q)).map(s => s.id));
+  }, [searchActive, searchQuery, spots]);
+
+  const searchResults = useMemo(() => {
+    if (!searchActive || !searchQuery.trim()) return [];
+    const q = searchQuery.trim().toLowerCase();
+    return spots.filter(s => s.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [searchActive, searchQuery, spots]);
+
+  function handleCloseSearch() {
+    setSearchActive(false);
+    setSearchQuery('');
+    Keyboard.dismiss();
+  }
+
+  function handleSearchResultPress(spot: Spot) {
+    handleCloseSearch();
+    mapRef.current?.animateToRegion({
+      latitude: spot.lat,
+      longitude: spot.lng,
+      latitudeDelta: 0.005,
+      longitudeDelta: 0.005,
+    }, 600);
+    setTimeout(() => {
+      setSelectedSpot(spot);
+      setCheckInVisible(true);
+    }, 650);
+  }
+
+  function handleClusterPress(cluster: SpotCluster) {
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const s of cluster.spots) {
+      if (s.lat < minLat) minLat = s.lat;
+      if (s.lat > maxLat) maxLat = s.lat;
+      if (s.lng < minLng) minLng = s.lng;
+      if (s.lng > maxLng) maxLng = s.lng;
+    }
+    const padLat = Math.max((maxLat - minLat) * 0.5, 0.003);
+    const padLng = Math.max((maxLng - minLng) * 0.5, 0.003);
+    mapRef.current?.animateToRegion({
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: (maxLat - minLat) + padLat,
+      longitudeDelta: (maxLng - minLng) + padLng,
+    }, 500);
+  }
 
   async function handleCheckOut(): Promise<void> {
     if (!myCheckIn) return;
@@ -444,49 +630,85 @@ export default function MapScreen({ user }: Props) {
   const fabBottom = hasBanner ? 36 + BANNER_LIFT : 36;
   const recenterBottom = hasBanner ? 104 + BANNER_LIFT : 104;
 
+  function isSpotDimmed(spotId: string): boolean {
+    return searchMatchIds !== null && !searchMatchIds.has(spotId);
+  }
+
   return (
     <View style={styles.container}>
       <MapView
         ref={mapRef} style={styles.map}
         initialRegion={COPENHAGEN} customMapStyle={DARK_MAP_STYLE}
         userInterfaceStyle="dark" showsUserLocation showsMyLocationButton={false}
+        onRegionChangeComplete={setMapRegion}
+        onPress={() => { if (searchActive) handleCloseSearch(); }}
       >
-        {spots.map((spot) => {
-          const spotCheckins = checkinsBySpot[spot.id] ?? [];
-          return (
-            <React.Fragment key={spot.id}>
+        {/* Spot markers — clustered */}
+        {clusteredSpots.map((item) => {
+          if (item.type === 'cluster') {
+            const { cluster } = item;
+            return (
               <Marker
-                coordinate={{ latitude: spot.lat, longitude: spot.lng }}
-                onPress={() => { setSelectedSpot(spot); setCheckInVisible(true); }}
+                key={cluster.id}
+                coordinate={{ latitude: cluster.lat, longitude: cluster.lng }}
                 anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}
+                onPress={() => handleClusterPress(cluster)}
               >
-                <View style={styles.markerContainer}>
-                  <View style={styles.markerBubble}><Text style={styles.markerEmoji}>{spot.emoji}</Text></View>
-                  <View style={styles.markerTail} />
+                <View style={styles.clusterContainer}>
+                  <View style={styles.clusterBubble}>
+                    <Text style={styles.clusterCount}>{cluster.spots.length}</Text>
+                  </View>
+                  <View style={styles.clusterTail} />
                 </View>
               </Marker>
-              {spotCheckins.slice(0, 3).map((checkin, idx) => (
-                <CheckInBubble
-                  key={`ci-${checkin.id}-${checkin.photoBase64 ? 'photo' : 'none'}`}
-                  checkin={checkin}
-                  spotName={spot.name}
-                  spotLat={spot.lat}
-                  spotLng={spot.lng}
-                  idx={idx}
-                  isSelf={checkin.userId === user.id}
-                  showCarBadge={myOnMyWayCheckinIds.has(checkin.id) || incomingUserIds.has(checkin.userId)}
-                  incomingCount={incomingCountByCheckin.get(checkin.id) ?? 0}
-                  colors={colors}
-                  styles={styles}
-                  onPress={() => { setDetailCheckin(checkin); setDetailSpot(spot); setDetailVisible(true); }}
-                />
-              ))}
-            </React.Fragment>
+            );
+          }
+
+          const { spot } = item;
+          const dimmed = isSpotDimmed(spot.id);
+          return (
+            <Marker
+              key={spot.id}
+              coordinate={{ latitude: spot.lat, longitude: spot.lng }}
+              onPress={() => {
+                if (searchActive) handleCloseSearch();
+                setSelectedSpot(spot);
+                setCheckInVisible(true);
+              }}
+              anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}
+              opacity={dimmed ? 0.3 : 1}
+            >
+              <View style={styles.markerContainer}>
+                <View style={styles.markerBubble}><Text style={styles.markerEmoji}>{spot.emoji}</Text></View>
+                <View style={styles.markerTail} />
+              </View>
+            </Marker>
           );
+        })}
+
+        {/* Check-in bubbles — never clustered */}
+        {spots.map((spot) => {
+          const spotCheckins = checkinsBySpot[spot.id] ?? [];
+          return spotCheckins.slice(0, 3).map((checkin, idx) => (
+            <CheckInBubble
+              key={`ci-${checkin.id}-${checkin.photoBase64 ? 'photo' : 'none'}`}
+              checkin={checkin}
+              spotName={spot.name}
+              spotLat={spot.lat}
+              spotLng={spot.lng}
+              idx={idx}
+              isSelf={checkin.userId === user.id}
+              showCarBadge={myOnMyWayCheckinIds.has(checkin.id) || incomingUserIds.has(checkin.userId)}
+              incomingCount={incomingCountByCheckin.get(checkin.id) ?? 0}
+              colors={colors}
+              styles={styles}
+              onPress={() => { setDetailCheckin(checkin); setDetailSpot(spot); setDetailVisible(true); }}
+            />
+          ));
         })}
       </MapView>
 
-      {/* Friends filter chips */}
+      {/* Filter chips */}
       <ScrollView
         horizontal showsHorizontalScrollIndicator={false}
         style={styles.filterBar} contentContainerStyle={{ paddingRight: 12 }}
@@ -514,6 +736,63 @@ export default function MapScreen({ user }: Props) {
           </TouchableOpacity>
         ))}
       </ScrollView>
+
+      {/* Search button */}
+      <TouchableOpacity
+        style={[styles.searchBtn, searchActive && styles.searchBtnActive]}
+        onPress={() => {
+          if (searchActive) {
+            handleCloseSearch();
+          } else {
+            setSearchActive(true);
+            setTimeout(() => searchInputRef.current?.focus(), 100);
+          }
+        }}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.searchBtnText}>🔍</Text>
+      </TouchableOpacity>
+
+      {/* Search bar */}
+      {searchActive && (
+        <>
+          <View style={styles.searchBarContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              ref={searchInputRef}
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search spots..."
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none" autoCorrect={false}
+              returnKeyType="search"
+            />
+            <TouchableOpacity style={styles.searchCloseBtn} onPress={handleCloseSearch}>
+              <Text style={styles.searchCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {searchResults.length > 0 && (
+            <View style={styles.searchResults}>
+              <ScrollView keyboardShouldPersistTaps="handled">
+                {searchResults.map((spot) => (
+                  <TouchableOpacity
+                    key={spot.id}
+                    style={styles.searchResultItem}
+                    onPress={() => handleSearchResultPress(spot)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.searchResultEmoji}>{spot.emoji}</Text>
+                    <Text style={styles.searchResultName} numberOfLines={1}>{spot.name}</Text>
+                    <Text style={styles.searchResultArrow}>→</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </>
+      )}
 
       {/* Pre-check-in banner */}
       {myPreCheckIn && (

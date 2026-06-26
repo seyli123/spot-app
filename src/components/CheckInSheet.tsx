@@ -459,11 +459,9 @@ export default function CheckInSheet({ visible, spot, user, activeCheckIn, onChe
             </>
           )}
 
-          {spot.addedBy === user.id && (
-            <TouchableOpacity style={styles.deleteSpotBtn} onPress={handleDeleteSpot} activeOpacity={0.8}>
-              <Text style={styles.deleteSpotText}>Delete this spot</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity style={styles.deleteSpotBtn} onPress={handleDeleteSpot} activeOpacity={0.8}>
+            <Text style={styles.deleteSpotText}>🗑 Delete this spot</Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </Modal>
