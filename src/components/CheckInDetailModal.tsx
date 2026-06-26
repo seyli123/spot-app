@@ -40,6 +40,16 @@ function formatTimeAgo(ts: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function formatArrival(expiresAt: number): string {
+  const ms = expiresAt - Date.now();
+  if (ms <= 0) return 'Should be there by now';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `~${mins} min`;
+  const hours = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem > 0 ? `~${hours}h ${rem}m` : `~${hours}h`;
+}
+
 const createStyles = (colors: Colors) => StyleSheet.create({
   backdrop: {
     position: 'absolute',
@@ -74,6 +84,17 @@ const createStyles = (colors: Colors) => StyleSheet.create({
     borderWidth: 3, borderColor: colors.background,
   },
   username: { color: colors.text, fontSize: 20, fontWeight: '700', marginBottom: 8 },
+  preStatusPill: {
+    backgroundColor: '#F59E0B22', borderWidth: 1, borderColor: '#F59E0B',
+    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 8,
+  },
+  preStatusPillText: { color: '#F59E0B', fontSize: 12, fontWeight: '700' },
+  arrivalBadge: {
+    color: '#F59E0B', fontSize: 12, fontWeight: '600',
+    backgroundColor: '#F59E0B22',
+    paddingHorizontal: 8, paddingVertical: 2,
+    borderRadius: 10, overflow: 'hidden',
+  },
   spotRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
   spotEmoji: { fontSize: 22 },
   spotName: { color: colors.accent, fontSize: 16, fontWeight: '600' },
@@ -201,7 +222,8 @@ export default function CheckInDetailModal({ visible, checkin, spot, currentUser
   const isSelf = checkin.userId === currentUser.id;
   const showComing = !isSelf && checkin.type !== 'pre';
   const displayName = checkin.username ?? '?';
-  const avatarColor = isSelf ? colors.success : colors.accent;
+  const isPre = checkin.type === 'pre';
+  const avatarColor = isPre ? '#FF9500' : (isSelf ? colors.success : colors.accent);
 
   function handleMainBtnPress() {
     if (phase === 'picking') {
@@ -260,6 +282,11 @@ export default function CheckInDetailModal({ visible, checkin, spot, currentUser
             size={64} color={avatarColor} style={styles.avatarCircle}
           />
           <Text style={styles.username}>@{displayName}{isSelf ? ' (you)' : ''}</Text>
+          {isPre && (
+            <View style={styles.preStatusPill}>
+              <Text style={styles.preStatusPillText}>On the way</Text>
+            </View>
+          )}
           <View style={styles.spotRow}>
             <Text style={styles.spotEmoji}>{spot.emoji}</Text>
             <Text style={styles.spotName}>{spot.name}</Text>
@@ -272,15 +299,25 @@ export default function CheckInDetailModal({ visible, checkin, spot, currentUser
                 <Text style={styles.detailText}>{checkin.status}</Text>
               </View>
             ) : null}
-            <View style={styles.detailRow}>
-              <Text style={styles.detailIcon}>⏱</Text>
-              <Text style={styles.detailText}>{DURATION_LABELS[checkin.duration]}</Text>
-              <Text style={styles.detailBadge}>{formatRemaining(checkin.expiresAt)}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailIcon}>🕐</Text>
-              <Text style={styles.detailText}>Checked in {formatTimeAgo(checkin.createdAt)}</Text>
-            </View>
+            {isPre ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailIcon}>🚶</Text>
+                <Text style={styles.detailText}>Heading there</Text>
+                <Text style={styles.arrivalBadge}>{formatArrival(checkin.expiresAt)}</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailIcon}>⏱</Text>
+                  <Text style={styles.detailText}>{DURATION_LABELS[checkin.duration]}</Text>
+                  <Text style={styles.detailBadge}>{formatRemaining(checkin.expiresAt)}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailIcon}>🕐</Text>
+                  <Text style={styles.detailText}>Checked in {formatTimeAgo(checkin.createdAt)}</Text>
+                </View>
+              </>
+            )}
           </View>
 
           {incomingFriends.filter((f) => f.fromUserId !== currentUser.id).length > 0 && (

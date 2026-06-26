@@ -64,12 +64,12 @@ const createStyles = (colors: Colors) => StyleSheet.create({
     shadowOpacity: 0.5, shadowRadius: 8, elevation: 8,
   },
   bubbleFramePre: {
-    borderColor: '#FF9500', opacity: 0.65,
+    borderColor: '#FF9500', borderStyle: 'dashed', opacity: 0.6,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.3, shadowRadius: 3, elevation: 4,
   },
   bubbleFramePreSelf: {
-    borderColor: '#FF9500', opacity: 0.75,
+    borderColor: '#FF9500', borderStyle: 'dashed', opacity: 0.7,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.3, shadowRadius: 3, elevation: 4,
   },
@@ -178,7 +178,7 @@ function CheckInBubble({ checkin, spotName, spotLat, spotLng, idx, isSelf, showC
   const pulseAnim = useRef(new Animated.Value(0)).current;
   const badgeScale = useRef(new Animated.Value(0)).current;
 
-  const hasBadge = showCarBadge || incomingCount > 0;
+  const hasBadge = isPre || showCarBadge || incomingCount > 0;
 
   useEffect(() => {
     if (isPre) return;
@@ -204,9 +204,16 @@ function CheckInBubble({ checkin, spotName, spotLat, spotLng, idx, isSelf, showC
     ? (isSelf ? styles.bubbleFramePreSelf : styles.bubbleFramePre)
     : (isSelf ? styles.bubbleFrameSelf : styles.bubbleFrameActive);
 
-  const label = spotName.length > 12 ? `${spotName.slice(0, 12)}…` : spotName;
+  const label = isPre ? 'On the way...' : (spotName.length > 12 ? `${spotName.slice(0, 12)}…` : spotName);
 
   function renderBadge() {
+    if (isPre) {
+      return (
+        <Animated.View style={[styles.badgeContainer, { transform: [{ scale: badgeScale }] }]}>
+          <Text style={styles.carEmoji}>🚶</Text>
+        </Animated.View>
+      );
+    }
     if (incomingCount >= 3) {
       return (
         <Animated.View style={[styles.badgeContainer, { transform: [{ scale: badgeScale }] }]}>
