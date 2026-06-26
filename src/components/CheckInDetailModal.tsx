@@ -254,7 +254,7 @@ export default function CheckInDetailModal({ visible, checkin, spot, currentUser
         await sendPushNotifications(
           [target.pushToken],
           `${currentUser.username} is on their way · ETA ~${minutes} min`,
-          "Someone's coming! 🚗"
+          "Someone's coming! 🚲"
         );
       }
       Animated.timing(pillsAnim, { toValue: 0, duration: 200, useNativeDriver: false }).start();
@@ -329,7 +329,7 @@ export default function CheckInDetailModal({ visible, checkin, spot, currentUser
                   .filter((f) => f.fromUserId !== currentUser.id)
                   .map((omw) => (
                     <View key={omw.id} style={styles.detailRow}>
-                      <Text style={styles.detailIcon}>🚗</Text>
+                      <Text style={styles.detailIcon}>🚲</Text>
                       <Text style={styles.detailText}>{omw.fromUsername}</Text>
                       <Text style={styles.detailBadge}>{omw.etaMinutes} min</Text>
                     </View>
@@ -353,7 +353,7 @@ export default function CheckInDetailModal({ visible, checkin, spot, currentUser
                     activeOpacity={0.85}
                     disabled={sending}
                   >
-                    <Text style={styles.comingBtnText}>🚗  Coming!</Text>
+                    <Text style={styles.comingBtnText}>🚲  Coming!</Text>
                   </TouchableOpacity>
                   <Animated.View style={{ opacity: pillsAnim, height: pillsHeight, overflow: 'hidden' }}>
                     <View style={styles.pillsRow}>

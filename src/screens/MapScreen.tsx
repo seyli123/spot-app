@@ -217,7 +217,7 @@ function CheckInBubble({ checkin, spotName, spotLat, spotLng, idx, isSelf, showC
     if (incomingCount >= 3) {
       return (
         <Animated.View style={[styles.badgeContainer, { transform: [{ scale: badgeScale }] }]}>
-          <Text style={styles.carEmoji}>🚗</Text>
+          <Text style={styles.carEmoji}>🚲</Text>
           <View style={styles.countCircle}>
             <Text style={styles.countText}>{incomingCount}</Text>
           </View>
@@ -227,15 +227,15 @@ function CheckInBubble({ checkin, spotName, spotLat, spotLng, idx, isSelf, showC
     if (incomingCount === 2) {
       return (
         <Animated.View style={[styles.badgeContainer, { transform: [{ scale: badgeScale }], flexDirection: 'row' }]}>
-          <Text style={styles.carEmoji}>🚗</Text>
-          <Text style={[styles.carEmoji, { marginLeft: -4 }]}>🚗</Text>
+          <Text style={styles.carEmoji}>🚲</Text>
+          <Text style={[styles.carEmoji, { marginLeft: -4 }]}>🚲</Text>
         </Animated.View>
       );
     }
     if (incomingCount === 1 || showCarBadge) {
       return (
         <Animated.View style={[styles.badgeContainer, { transform: [{ scale: badgeScale }] }]}>
-          <Text style={styles.carEmoji}>🚗</Text>
+          <Text style={styles.carEmoji}>🚲</Text>
         </Animated.View>
       );
     }
