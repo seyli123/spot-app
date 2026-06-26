@@ -5,8 +5,8 @@ import {
 } from 'react-native';
 import MapView, { Region } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { useTheme, Colors, COPENHAGEN, DARK_MAP_STYLE, EMOJI_OPTIONS } from '../theme';
-import EmojiPicker from './EmojiPicker';
+import EmojiPicker from 'rn-emoji-keyboard';
+import { useTheme, Colors, COPENHAGEN, DARK_MAP_STYLE } from '../theme';
 import { createSpot } from '../services/firestore';
 import { User } from '../types';
 
@@ -70,6 +70,15 @@ const createStyles = (colors: Colors) => StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 15, color: colors.text, borderWidth: 1, borderColor: colors.border,
   },
+  emojiCircle: {
+    width: 60, height: 60, borderRadius: 30,
+    backgroundColor: '#2A2A2A',
+    borderWidth: 2, borderColor: '#FF6B6B',
+    alignItems: 'center', justifyContent: 'center',
+    alignSelf: 'flex-start',
+  },
+  emojiCircleEmoji: { fontSize: 28 },
+  emojiCirclePlus: { fontSize: 28, color: colors.textMuted, fontWeight: '300' },
   addBtn: {
     backgroundColor: colors.accent, borderRadius: 14, paddingVertical: 16,
     alignItems: 'center', marginTop: 20, marginBottom: 8,
@@ -82,7 +91,8 @@ export default function AddSpotSheet({ visible, user, onClose }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [name, setName] = useState('');
-  const [emoji, setEmoji] = useState(EMOJI_OPTIONS[0]);
+  const [emoji, setEmoji] = useState('');
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [region, setRegion] = useState<Region>({ ...COPENHAGEN, latitudeDelta: 0.01, longitudeDelta: 0.01 });
   const [locating, setLocating] = useState(false);
@@ -113,10 +123,11 @@ export default function AddSpotSheet({ visible, user, onClose }: Props) {
 
   async function handleAdd() {
     if (!name.trim()) { Alert.alert('Name required', 'Give this spot a name.'); return; }
+    if (!emoji) { Alert.alert('Emoji required', 'Pick an emoji for this spot.'); return; }
     setLoading(true);
     try {
       await createSpot({ name: name.trim(), lat: region.latitude, lng: region.longitude, emoji, addedBy: user.id, createdAt: Date.now() });
-      setName(''); setEmoji(EMOJI_OPTIONS[0]); onClose();
+      setName(''); setEmoji(''); onClose();
     } catch { Alert.alert('Error', 'Failed to add spot. Try again.'); }
     finally { setLoading(false); }
   }
@@ -142,7 +153,7 @@ export default function AddSpotSheet({ visible, user, onClose }: Props) {
             userInterfaceStyle="dark"
           />
           <View style={styles.pinContainer} pointerEvents="none">
-            <Text style={styles.pin}>{emoji}</Text>
+            <Text style={styles.pin}>{emoji || '📍'}</Text>
             <View style={styles.pinShadow} />
           </View>
           <Text style={styles.mapHint}>Pan to place the pin</Text>
@@ -161,7 +172,28 @@ export default function AddSpotSheet({ visible, user, onClose }: Props) {
             maxLength={48} returnKeyType="done"
           />
           <Text style={styles.label}>Pick an emoji</Text>
-          <EmojiPicker selected={emoji} onSelect={setEmoji} />
+          <TouchableOpacity style={styles.emojiCircle} onPress={() => setEmojiPickerOpen(true)} activeOpacity={0.8}>
+            {emoji ? (
+              <Text style={styles.emojiCircleEmoji}>{emoji}</Text>
+            ) : (
+              <Text style={styles.emojiCirclePlus}>+</Text>
+            )}
+          </TouchableOpacity>
+          <EmojiPicker
+            onEmojiSelected={(e: { emoji: string }) => setEmoji(e.emoji)}
+            open={emojiPickerOpen}
+            onClose={() => setEmojiPickerOpen(false)}
+            enableSearchBar
+            theme={{
+              backdrop: '#00000077',
+              knob: '#555',
+              container: '#1C1C1E',
+              header: '#fff',
+              skinTonesContainer: '#252527',
+              category: { icon: '#888', iconActive: '#FF6B6B', container: '#1C1C1E', containerActive: '#2A2A2A' },
+              search: { text: '#fff', placeholder: '#666', icon: '#888', background: '#2A2A2A' },
+            }}
+          />
           <TouchableOpacity
             style={[styles.addBtn, loading && styles.addBtnDisabled]}
             onPress={handleAdd} disabled={loading} activeOpacity={0.8}
