@@ -1,80 +1,76 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  onAuthStateChanged,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  sendPasswordResetEmail,
-} from 'firebase/auth';
-import { auth } from '../config/firebase';
 import { User } from '../types';
 import { getUser, createUser, updateUserDoc } from '../services/firestore';
+import {
+  signUpWithEmail,
+  signInWithEmail,
+  sendPasswordReset,
+  getStoredAuth,
+  clearStoredAuth,
+} from '../services/auth';
 
 const USER_KEY = '@spot_user';
 
 export function useUser() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const signingUp = useRef(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (signingUp.current) return;
-
-      if (firebaseUser) {
-        try {
-          const stored = await AsyncStorage.getItem(USER_KEY);
-          const local: User | null = stored ? JSON.parse(stored) : null;
-          const remote = await getUser(firebaseUser.uid);
-
-          if (remote) {
-            const merged = local && local.id === firebaseUser.uid
-              ? { ...local, ...remote }
-              : remote;
-            setUser(merged);
-            await AsyncStorage.setItem(USER_KEY, JSON.stringify(merged));
-          } else if (local && local.id === firebaseUser.uid) {
-            setUser(local);
-          } else {
-            setUser(null);
-          }
-        } catch (e) {
-          console.warn('Failed to load user profile', e);
-          setUser(null);
-        }
-      } else {
-        await AsyncStorage.removeItem(USER_KEY);
-        setUser(null);
-      }
-      setLoading(false);
-    });
-
-    return unsubscribe;
+    loadUser();
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string, username: string) => {
-    signingUp.current = true;
+  async function loadUser() {
     try {
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      const newUser: User = {
-        id: cred.user.uid,
-        username,
-        email,
-        friendIds: [],
-        createdAt: Date.now(),
-      };
-      await createUser(newUser);
-      await AsyncStorage.setItem(USER_KEY, JSON.stringify(newUser));
-      setUser(newUser);
-      setLoading(false);
+      const [storedUser, storedAuth] = await Promise.all([
+        AsyncStorage.getItem(USER_KEY),
+        getStoredAuth(),
+      ]);
+
+      if (storedUser && storedAuth) {
+        const parsed: User = JSON.parse(storedUser);
+        if (parsed.id === storedAuth.uid) {
+          const remote = await getUser(parsed.id);
+          const merged: User = remote ? { ...parsed, ...remote } : parsed;
+          setUser(merged);
+          await AsyncStorage.setItem(USER_KEY, JSON.stringify(merged));
+        } else {
+          await Promise.all([AsyncStorage.removeItem(USER_KEY), clearStoredAuth()]);
+        }
+      } else if (storedUser || storedAuth) {
+        await Promise.all([AsyncStorage.removeItem(USER_KEY), clearStoredAuth()]);
+      }
+    } catch (e) {
+      console.warn('Failed to load user', e);
     } finally {
-      signingUp.current = false;
+      setLoading(false);
     }
+  }
+
+  const signUp = useCallback(async (email: string, password: string, username: string) => {
+    const result = await signUpWithEmail(email, password);
+    const newUser: User = {
+      id: result.uid,
+      username,
+      email,
+      friendIds: [],
+      createdAt: Date.now(),
+    };
+    await createUser(newUser);
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(newUser));
+    setUser(newUser);
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+    const result = await signInWithEmail(email, password);
+    const remote = await getUser(result.uid);
+    if (!remote) {
+      const err = new Error('User profile not found') as Error & { code: string };
+      err.code = 'auth/user-not-found';
+      throw err;
+    }
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(remote));
+    setUser(remote);
   }, []);
 
   const updateUser = useCallback(async (updates: Partial<User>) => {
@@ -86,19 +82,18 @@ export function useUser() {
   }, [user]);
 
   const logout = useCallback(async () => {
-    await signOut(auth);
-    await AsyncStorage.removeItem(USER_KEY);
+    await Promise.all([AsyncStorage.removeItem(USER_KEY), clearStoredAuth()]);
     setUser(null);
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {
-    await sendPasswordResetEmail(auth, email);
+    await sendPasswordReset(email);
   }, []);
 
   const reload = useCallback(async () => {
-    const firebaseUser = auth.currentUser;
-    if (!firebaseUser) return;
-    const remote = await getUser(firebaseUser.uid);
+    const storedAuth = await getStoredAuth();
+    if (!storedAuth) return;
+    const remote = await getUser(storedAuth.uid);
     if (remote) {
       setUser(remote);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(remote));

@@ -1,7 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { initializeAuth, getAuth, type Auth } from 'firebase/auth';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -14,19 +12,3 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const db = getFirestore(app);
-
-// getReactNativePersistence is exported by the RN-specific bundle that Metro resolves at runtime,
-// but the default TypeScript declarations for firebase/auth don't include it.
-const { getReactNativePersistence } = require('firebase/auth') as {
-  getReactNativePersistence: (storage: typeof AsyncStorage) => import('firebase/auth').Persistence;
-};
-
-let auth: Auth;
-try {
-  auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage),
-  });
-} catch {
-  auth = getAuth(app);
-}
-export { auth };
