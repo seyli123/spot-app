@@ -1,5 +1,5 @@
 import 'react-native-gesture-handler';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -7,11 +7,13 @@ import { ThemeProvider, useTheme } from './src/theme';
 import { useUser } from './src/hooks/useUser';
 import { registerForPushNotifications } from './src/services/notifications';
 import AppNavigator from './src/navigation';
-import OnboardingScreen from './src/screens/OnboardingScreen';
+import LoginScreen from './src/screens/LoginScreen';
+import SignUpScreen from './src/screens/SignUpScreen';
 
 function AppInner() {
   const { colors, theme } = useTheme();
-  const { user, loading, saveUser, updateUser, loginWithUsername, logout } = useUser();
+  const { user, loading, signUp, login, updateUser, logout, resetPassword } = useUser();
+  const [authScreen, setAuthScreen] = useState<'login' | 'signup'>('login');
 
   useEffect(() => {
     if (user) {
@@ -35,7 +37,18 @@ function AppInner() {
       <SafeAreaProvider>
         <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} />
         {!user ? (
-          <OnboardingScreen onComplete={saveUser} onLogin={loginWithUsername} />
+          authScreen === 'login' ? (
+            <LoginScreen
+              onLogin={login}
+              onResetPassword={resetPassword}
+              onGoToSignUp={() => setAuthScreen('signup')}
+            />
+          ) : (
+            <SignUpScreen
+              onSignUp={signUp}
+              onGoToLogin={() => setAuthScreen('login')}
+            />
+          )
         ) : (
           <AppNavigator user={user} onUserUpdate={updateUser} onLogout={logout} />
         )}
