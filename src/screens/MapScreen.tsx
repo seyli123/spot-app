@@ -74,13 +74,18 @@ const createStyles = (colors: Colors) => StyleSheet.create({
     shadowOpacity: 0.3, shadowRadius: 3, elevation: 4,
   },
   badgeContainer: {
-    position: 'absolute', bottom: 6, right: 4,
+    position: 'absolute', bottom: -2, right: -4,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 2,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3, shadowRadius: 2, elevation: 3,
   },
   carEmoji: {
-    fontSize: 13, lineHeight: 15,
+    fontSize: 18, lineHeight: 22,
   },
   countCircle: {
-    position: 'absolute', top: -5, right: -7,
+    position: 'absolute', top: -6, right: -8,
     width: 18, height: 18, borderRadius: 9,
     backgroundColor: '#FF6B6B',
     alignItems: 'center', justifyContent: 'center',
