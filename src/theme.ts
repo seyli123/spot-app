@@ -137,12 +137,13 @@ export const DARK_MAP_STYLE = [
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4e6d70' }] },
 ];
 
-export const DURATION_LABELS = {
+export const DURATION_LABELS: Record<import('./types').Duration, string> = {
   '30min': '30 min',
   '1h': '1 hour',
   '2h': '2 hours',
   'all-day': 'All day',
-} as const;
+  'custom': 'Custom',
+};
 
 export const EMOJI_OPTIONS = [
   '☕', '🍺', '🍕', '🍜', '🍣', '🥗',

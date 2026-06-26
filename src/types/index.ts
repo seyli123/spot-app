@@ -25,7 +25,7 @@ export interface Group {
   memberIds: string[];
 }
 
-export type Duration = '30min' | '1h' | '2h' | 'all-day';
+export type Duration = '30min' | '1h' | '2h' | 'all-day' | 'custom';
 
 export type CheckInType = 'active' | 'pre';
 

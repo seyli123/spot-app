@@ -188,8 +188,9 @@ export function subscribeGroups(userId: string, cb: (groups: Group[]) => void): 
 
 // ── Check-ins ──────────────────────────────────────────────────────────────
 
-function durationToMs(duration: Duration): number {
-  const map: Record<Duration, number> = {
+function durationToMs(duration: Duration, customMs?: number): number {
+  if (duration === 'custom') return customMs ?? 0;
+  const map: Record<Exclude<Duration, 'custom'>, number> = {
     '30min': 30 * 60 * 1000,
     '1h': 60 * 60 * 1000,
     '2h': 2 * 60 * 60 * 1000,
@@ -210,13 +211,15 @@ export async function createCheckIn(params: {
   duration: Duration;
   groupId: string;
   type?: import('../types').CheckInType;
+  customDurationMs?: number;
 }): Promise<string> {
+  const { customDurationMs, ...rest } = params;
   const now = Date.now();
   const checkin: Omit<CheckIn, 'id'> = {
-    ...params,
+    ...rest,
     type: params.type ?? 'active',
     createdAt: now,
-    expiresAt: now + durationToMs(params.duration),
+    expiresAt: now + durationToMs(params.duration, customDurationMs),
   };
   const ref = await addDoc(collection(db, 'checkins'), checkin);
   return ref.id;

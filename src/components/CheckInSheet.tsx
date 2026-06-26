@@ -18,7 +18,7 @@ interface Props {
   onClose: () => void;
 }
 
-const DURATIONS: Duration[] = ['30min', '1h', '2h', 'all-day'];
+const DURATIONS: Duration[] = ['30min', '1h', '2h', 'all-day', 'custom'];
 
 function formatRemaining(expiresAt: number): string {
   const ms = expiresAt - Date.now();
@@ -98,15 +98,37 @@ const createStyles = (colors: Colors) => StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 15, color: colors.text, borderWidth: 1, borderColor: colors.border,
   },
-  durationRow: { flexDirection: 'row', gap: 8 },
+  durationScroll: { marginBottom: 4 },
+  durationRow: { flexDirection: 'row', gap: 8, paddingRight: 8 },
   durationBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10,
     backgroundColor: colors.background, alignItems: 'center',
     borderWidth: 1, borderColor: colors.border,
   },
   durationBtnActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   durationText: { color: colors.textSecondary, fontSize: 13, fontWeight: '500' },
   durationTextActive: { color: '#fff', fontWeight: '700' },
+  customTimeRow: {
+    flexDirection: 'row', gap: 16, marginTop: 12, justifyContent: 'center',
+  },
+  stepperGroup: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  stepperBtn: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: colors.background,
+    borderWidth: 1, borderColor: colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stepperBtnText: { color: colors.text, fontSize: 18, fontWeight: '600' },
+  stepperValue: {
+    flexDirection: 'row', alignItems: 'baseline',
+    backgroundColor: '#2A2A2A',
+    borderWidth: 1, borderColor: '#FF6B6B',
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
+    minWidth: 56, justifyContent: 'center',
+  },
+  stepperValueText: { color: '#fff', fontSize: 20, fontWeight: '700' },
+  stepperUnit: { color: colors.textMuted, fontSize: 14, fontWeight: '600', marginLeft: 2 },
+  customError: { color: '#E53935', fontSize: 12, marginTop: 6, textAlign: 'center' },
   groupScroll: { marginBottom: 4 },
   groupBtn: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
@@ -143,6 +165,9 @@ export default function CheckInSheet({ visible, spot, user, activeCheckIn, onChe
   const [loading, setLoading] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const [arriving, setArriving] = useState(false);
+  const [customHours, setCustomHours] = useState(0);
+  const [customMinutes, setCustomMinutes] = useState(0);
+  const customTotalMin = customHours * 60 + customMinutes;
 
   useEffect(() => {
     if (!visible) return;
@@ -192,19 +217,34 @@ export default function CheckInSheet({ visible, spot, user, activeCheckIn, onChe
     finally { setArriving(false); }
   }
 
+  function formatCustomLabel(h: number, m: number): string {
+    if (h > 0 && m > 0) return `${h}h ${m}m`;
+    if (h > 0) return `${h}h`;
+    return `${m}m`;
+  }
+
   async function handleConfirm(type: 'active' | 'pre' = 'active') {
     if (!spot) return;
+    if (duration === 'custom' && customTotalMin < 5) {
+      Alert.alert('Invalid duration', 'Minimum custom time is 5 minutes.');
+      return;
+    }
     setLoading(true);
     try {
       if (activeCheckIn) await deleteCheckIn(activeCheckIn.id);
 
+      const customDurationMs = duration === 'custom' ? customTotalMin * 60 * 1000 : undefined;
       await createCheckIn({
         userId: user.id, spotId: spot.id,
         status: status.trim(), duration, groupId: selectedGroupId, type,
+        customDurationMs,
       });
 
       if (type === 'active') {
-        const msg = `${user.username} is at ${spot.name} · ${status.trim() || 'hanging out'} · ${DURATION_LABELS[duration]}`;
+        const durationLabel = duration === 'custom'
+          ? formatCustomLabel(customHours, customMinutes)
+          : DURATION_LABELS[duration];
+        const msg = `${user.username} is at ${spot.name} · ${status.trim() || 'hanging out'} · ${durationLabel}`;
         if (selectedGroupId === 'all') {
           if (user.friendIds.length > 0) {
             const friends = await getFriends(user.friendIds);
@@ -223,6 +263,7 @@ export default function CheckInSheet({ visible, spot, user, activeCheckIn, onChe
       }
 
       onClose(); setStatus(''); setDuration('1h'); setSelectedGroupId('all');
+      setCustomHours(0); setCustomMinutes(0);
     } catch { Alert.alert('Error', 'Failed to check in. Please try again.'); }
     finally { setLoading(false); }
   }
@@ -326,19 +367,58 @@ export default function CheckInSheet({ visible, spot, user, activeCheckIn, onChe
               />
 
               <Text style={styles.label}>How long?</Text>
-              <View style={styles.durationRow}>
-                {DURATIONS.map((d) => (
-                  <TouchableOpacity
-                    key={d}
-                    style={[styles.durationBtn, d === duration && styles.durationBtnActive]}
-                    onPress={() => setDuration(d)} activeOpacity={0.7}
-                  >
-                    <Text style={[styles.durationText, d === duration && styles.durationTextActive]}>
-                      {DURATION_LABELS[d]}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.durationScroll}>
+                <View style={styles.durationRow}>
+                  {DURATIONS.map((d) => (
+                    <TouchableOpacity
+                      key={d}
+                      style={[styles.durationBtn, d === duration && styles.durationBtnActive]}
+                      onPress={() => setDuration(d)} activeOpacity={0.7}
+                    >
+                      <Text style={[styles.durationText, d === duration && styles.durationTextActive]}>
+                        {d === 'custom'
+                          ? (duration === 'custom' && customTotalMin >= 5
+                            ? formatCustomLabel(customHours, customMinutes)
+                            : 'Custom +')
+                          : DURATION_LABELS[d]}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+              {duration === 'custom' && (
+                <>
+                  <View style={styles.customTimeRow}>
+                    <View style={styles.stepperGroup}>
+                      <TouchableOpacity style={styles.stepperBtn} onPress={() => setCustomHours(Math.max(0, customHours - 1))} activeOpacity={0.7}>
+                        <Text style={styles.stepperBtnText}>−</Text>
+                      </TouchableOpacity>
+                      <View style={styles.stepperValue}>
+                        <Text style={styles.stepperValueText}>{customHours}</Text>
+                        <Text style={styles.stepperUnit}>h</Text>
+                      </View>
+                      <TouchableOpacity style={styles.stepperBtn} onPress={() => { const h = Math.min(12, customHours + 1); setCustomHours(h); if (h === 12) setCustomMinutes(0); }} activeOpacity={0.7}>
+                        <Text style={styles.stepperBtnText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.stepperGroup}>
+                      <TouchableOpacity style={styles.stepperBtn} onPress={() => { if (customHours < 12) setCustomMinutes(Math.max(0, customMinutes - 5)); }} activeOpacity={0.7}>
+                        <Text style={styles.stepperBtnText}>−</Text>
+                      </TouchableOpacity>
+                      <View style={styles.stepperValue}>
+                        <Text style={styles.stepperValueText}>{customMinutes}</Text>
+                        <Text style={styles.stepperUnit}>m</Text>
+                      </View>
+                      <TouchableOpacity style={styles.stepperBtn} onPress={() => { if (customHours < 12) setCustomMinutes(Math.min(55, customMinutes + 5)); }} activeOpacity={0.7}>
+                        <Text style={styles.stepperBtnText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  {customTotalMin > 0 && customTotalMin < 5 && (
+                    <Text style={styles.customError}>Minimum 5 minutes</Text>
+                  )}
+                </>
+              )}
 
               <Text style={styles.label}>Notify</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.groupScroll}>
