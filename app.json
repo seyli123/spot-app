@@ -1,25 +1,73 @@
 {
   "expo": {
-    "name": "spot-app-tmp",
-    "slug": "spot-app-tmp",
+    "name": "Spot",
+    "slug": "spot-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "scheme": "spot",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.spot.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Spot uses your location to show nearby spots on the map.",
+        "NSLocationAlwaysUsageDescription": "Spot uses your location to show nearby spots on the map."
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#121212",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundImage": "./assets/android-icon-background.png"
       },
-      "predictiveBackGestureEnabled": false
+      "package": "com.spot.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+        }
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#FF6B6B",
+          "sounds": []
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Spot uses your location to show nearby spots.",
+          "locationWhenInUsePermission": "Spot uses your location to show nearby spots."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Spot uses your photos to set your profile picture.",
+          "cameraPermission": "Spot uses your camera to take a profile picture."
+        }
+      ]
+    ],
+    "extra": {
+      "firebaseApiKey": "AIzaSyB2hw_NFC-dbHNc2Z2mAxRe1MmOLRKXDgA",
+      "firebaseAuthDomain": "spot-app-c8071.firebaseapp.com",
+      "firebaseProjectId": "spot-app-c8071",
+      "firebaseStorageBucket": "spot-app-c8071.firebasestorage.app",
+      "firebaseMessagingSenderId": "566320353738",
+      "firebaseAppId": "1:566320353738:web:b7e2e2bcd81276d6d23f33"
     }
   }
 }
